@@ -1,7 +1,5 @@
-import pandas as pd
 import scipy.stats as scs
 from simulation import simulate_data
-
 
 (
     users_std, 
@@ -24,42 +22,15 @@ def analyze_data(users, purchases):
     variant_buyers = purchases.loc[purchases["group"] == "Variant", "userid"].nunique()
     variant_nonbuyers = variant_total_users - variant_buyers
 
-    
-    #control_total_users_std = (users_std["group"] == "Control").sum()
-    #control_buyers_std = purchases_std.loc[purchases_std["group"] == "Control", "userid"].nunique()
-    #control_nonbuyers_std = control_total_users_std - control_buyers_std
-
-    #variant_total_users_std = (users_std["group"] == "Variant").sum()
-    #variant_buyers_std = purchases_std.loc[purchases_std["group"] == "Variant", "userid"].nunique()
-    #variant_nonbuyers_std = variant_total_users_std - variant_buyers_std
-
-
-    #control_total_users_null = (users_null["group"] == "Control").sum()
-    #control_buyers_null = purchases_null.loc[purchases_null["group"] == "Control", "userid"].nunique()
-    #control_nonbuyers_null = control_total_users_null - control_buyers_null
-
-    #variant_total_users_null = (users_null["group"] == "Variant").sum()
-    #variant_buyers_null = purchases_null.loc[purchases_null["group"] == "Variant", "userid"].nunique()
-    #variant_nonbuyers_null = variant_total_users_null - variant_buyers_null
-
-
     values = users.join(purchases.groupby("userid").agg(value=("value", "sum")), on="userid").fillna(0)
     control_values = values.loc[values["group"] == "Control", "value"].to_numpy()
     variant_values = values.loc[values["group"] == "Variant", "value"].to_numpy()
-
-    #cvn = users_null.join(purchases_null.groupby("userid").agg(value=("value", "sum")), on="userid").fillna(0)
-    #control_values_null = cvn.loc[cvn["group"] == "Control", "value"].to_numpy()
-    #variant_values_null = cvn.loc[cvn["group"] == "Variant", "value"].to_numpy()
 
 
     table = [[control_buyers, control_nonbuyers], [variant_buyers, variant_nonbuyers]]
     chi2test = scs.chi2_contingency(table)
 
-    #null_table = [[control_buyers_null, control_nonbuyers_null], [variant_buyers_null, variant_nonbuyers_null]]
-    #b = scs.chi2_contingency(null_table)
-
     aov = scs.ttest_ind(control_values, variant_values, equal_var=False)
-    #aov_null = scs.ttest_ind(control_values_null, variant_values_null, equal_var=False)
 
     users_grouped = users.groupby(["group", "region"]).size()
     purchases_grouped = purchases.groupby(["group", "region"]).agg(transactions=("userid", "count"), unique_buyers=("userid", "nunique"), revenue=("value", "sum"))
@@ -111,15 +82,20 @@ def analyze_data(users, purchases):
     
     return chi2test, aov, metrics
 
+
 a, b, std_results = analyze_data(users=users_std, purchases=purchases_std)
 c, d, null_results = analyze_data(users=users_null, purchases=purchases_null)
 
-print(f"Metrics table (std)")
-print(std_results)
-print(f"chi2test P-value (std): {a[1]}")
-print(f"ttest P-value (std): {b[1]}")
+std_results.to_csv("std_metrics_results.csv")
+null_results.to_csv("null_metrics_results.csv")
 
-print(f"Metrics table (null)")
-print(null_results)
-print(f"chi2test P-value (null): {c[1]}")
-print(f"ttest P-value (null)): {d[1]}")
+
+#print(f"### Metrics table (std) ###")
+#print(std_results)
+#print(f"\nchi2test P-value (std): {a[1]}")
+#print(f"ttest P-value (std): {b[1]}")
+
+#print(f"\n### Metrics table (null) ###")
+#print(null_results)
+#print(f"\nchi2test P-value (null): {c[1]}")
+#print(f"ttest P-value (null)): {d[1]}")
