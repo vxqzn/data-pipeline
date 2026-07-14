@@ -86,8 +86,8 @@ def analyze_data(users, purchases):
 a, b, std_results = analyze_data(users=users_std, purchases=purchases_std)
 c, d, null_results = analyze_data(users=users_null, purchases=purchases_null)
 
-std_results.to_csv("std_metrics_results.csv")
-null_results.to_csv("null_metrics_results.csv")
+std_results.to_csv("data/std_metrics_results.csv")
+null_results.to_csv("data/null_metrics_results.csv")
 
 
 #print(f"### Metrics table (std) ###")
