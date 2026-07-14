@@ -14,47 +14,112 @@ from simulation import simulate_data
 ) = simulate_data(null_twin=True)
 
 
-control_total_users_std = (users_std["group"] == "Control").sum()
-control_buyers_std = purchases_std.loc[purchases_std["group"] == "Control", "userid"].nunique()
-control_nonbuyers_std = control_total_users_std - control_buyers_std
+def analyze_data(users, purchases):
+        
+    control_total_users = (users["group"] == "Control").sum()
+    control_buyers = purchases.loc[purchases["group"] == "Control", "userid"].nunique()
+    control_nonbuyers = control_total_users - control_buyers
 
-variant_total_users_std = (users_std["group"] == "Variant").sum()
-variant_buyers_std = purchases_std.loc[purchases_std["group"] == "Variant", "userid"].nunique()
-variant_nonbuyers_std = variant_total_users_std - variant_buyers_std
+    variant_total_users = (users["group"] == "Variant").sum()
+    variant_buyers = purchases.loc[purchases["group"] == "Variant", "userid"].nunique()
+    variant_nonbuyers = variant_total_users - variant_buyers
 
+    
+    #control_total_users_std = (users_std["group"] == "Control").sum()
+    #control_buyers_std = purchases_std.loc[purchases_std["group"] == "Control", "userid"].nunique()
+    #control_nonbuyers_std = control_total_users_std - control_buyers_std
 
-control_total_users_null = (users_null["group"] == "Control").sum()
-control_buyers_null = purchases_null.loc[purchases_null["group"] == "Control", "userid"].nunique()
-control_nonbuyers_null = control_total_users_null - control_buyers_null
-
-variant_total_users_null = (users_null["group"] == "Variant").sum()
-variant_buyers_null = purchases_null.loc[purchases_null["group"] == "Variant", "userid"].nunique()
-variant_nonbuyers_null = variant_total_users_null - variant_buyers_null
-
-
-
-control_values_std = purchases_std.loc[purchases_std["group"] == "Control", "value"].to_numpy()
-variant_values_std = purchases_std.loc[purchases_std["group"] == "Variant", "value"].to_numpy()
-
-control_values_null = purchases_null.loc[purchases_null["group"] == "Control", "value"].to_numpy()
-variant_values_null = purchases_null.loc[purchases_null["group"] == "Variant", "value"].to_numpy()
+    #variant_total_users_std = (users_std["group"] == "Variant").sum()
+    #variant_buyers_std = purchases_std.loc[purchases_std["group"] == "Variant", "userid"].nunique()
+    #variant_nonbuyers_std = variant_total_users_std - variant_buyers_std
 
 
-std_table = [[control_buyers_std, control_nonbuyers_std], [variant_buyers_std, variant_nonbuyers_std]]
-a = scs.chi2_contingency(std_table)
+    #control_total_users_null = (users_null["group"] == "Control").sum()
+    #control_buyers_null = purchases_null.loc[purchases_null["group"] == "Control", "userid"].nunique()
+    #control_nonbuyers_null = control_total_users_null - control_buyers_null
 
-null_table = [[control_buyers_null, control_nonbuyers_null], [variant_buyers_null, variant_nonbuyers_null]]
-b = scs.chi2_contingency(null_table)
+    #variant_total_users_null = (users_null["group"] == "Variant").sum()
+    #variant_buyers_null = purchases_null.loc[purchases_null["group"] == "Variant", "userid"].nunique()
+    #variant_nonbuyers_null = variant_total_users_null - variant_buyers_null
 
-aov_std = scs.ttest_ind(control_values_std, variant_values_std, equal_var=False)
-aov_null = scs.ttest_ind(control_values_null, variant_values_null, equal_var=False)
 
-std_users_grouped = users_std.groupby(["group", "region"]).size()
-std_purchases_grouped = purchases_std.groupby(["group", "region"]).agg(transactions=("userid", "count"), unique_buyers=("userid", "nunique"), revenue=("value", "sum"))
+    values = users.join(purchases.groupby("userid").agg(value=("value", "sum")), on="userid").fillna(0)
+    control_values = values.loc[values["group"] == "Control", "value"].to_numpy()
+    variant_values = values.loc[values["group"] == "Variant", "value"].to_numpy()
 
-std_metrics = std_users_grouped.to_frame(name="total_users").join(std_purchases_grouped)
-std_metrics["conversion_rate"] = std_metrics["unique_buyers"] / std_metrics["total_users"]
-std_metrics["average_order_value"] = std_metrics["revenue"] / std_metrics["transactions"]
-std_metrics["revenue_per_user"] = std_metrics["revenue"] / std_metrics["total_users"]
+    #cvn = users_null.join(purchases_null.groupby("userid").agg(value=("value", "sum")), on="userid").fillna(0)
+    #control_values_null = cvn.loc[cvn["group"] == "Control", "value"].to_numpy()
+    #variant_values_null = cvn.loc[cvn["group"] == "Variant", "value"].to_numpy()
 
-print(std_metrics)
+
+    table = [[control_buyers, control_nonbuyers], [variant_buyers, variant_nonbuyers]]
+    chi2test = scs.chi2_contingency(table)
+
+    #null_table = [[control_buyers_null, control_nonbuyers_null], [variant_buyers_null, variant_nonbuyers_null]]
+    #b = scs.chi2_contingency(null_table)
+
+    aov = scs.ttest_ind(control_values, variant_values, equal_var=False)
+    #aov_null = scs.ttest_ind(control_values_null, variant_values_null, equal_var=False)
+
+    users_grouped = users.groupby(["group", "region"]).size()
+    purchases_grouped = purchases.groupby(["group", "region"]).agg(transactions=("userid", "count"), unique_buyers=("userid", "nunique"), revenue=("value", "sum"))
+
+    metrics = users_grouped.to_frame(name="total_users").join(purchases_grouped)
+    metrics["conversion_rate"] = metrics["unique_buyers"] / metrics["total_users"]
+    metrics["average_order_value"] = metrics["revenue"] / metrics["transactions"]
+    metrics["revenue_per_user"] = metrics["revenue"] / metrics["total_users"]
+
+    regions = ["EMEA", "NA", "ASIA", "LATAM"]
+
+    for r in regions:
+        region_mask = metrics.index.get_level_values("region") == r
+        ctrl_users = metrics.loc[("Control", r), "total_users"]
+        ctrl_buyers = metrics.loc[("Control", r), "unique_buyers"]
+        ctrl_nonbuyers = ctrl_users - ctrl_buyers
+
+        vrnt_users = metrics.loc[("Variant", r), "total_users"]
+        vrnt_buyers = metrics.loc[("Variant", r), "unique_buyers"]
+        vrnt_nonbuyers = vrnt_users - vrnt_buyers
+
+        contingency_table = [[ctrl_buyers, ctrl_nonbuyers], [vrnt_buyers, vrnt_nonbuyers]]
+        chi2_result = scs.chi2_contingency(contingency_table)
+
+        metrics.loc[region_mask, "p_value"] = chi2_result[1]
+
+        table_prep = values.loc[values["region"] == r]
+        table_filtered_control = table_prep.loc[table_prep["group"] == "Control", "value"].to_numpy()
+        table_filtered_variant = table_prep.loc[table_prep["group"] == "Variant", "value"].to_numpy()
+
+        ttest_result = scs.ttest_ind(table_filtered_control, table_filtered_variant, equal_var=False)
+
+        metrics.loc[region_mask, "ttest_p_value"] = ttest_result[1]
+
+        control_cr = metrics.loc[("Control", r), "conversion_rate"]
+        variant_cr = metrics.loc[("Variant", r), "conversion_rate"]
+        control_aov = metrics.loc[("Control", r), "average_order_value"]
+        variant_aov = metrics.loc[("Variant", r), "average_order_value"]
+        control_rpu = metrics.loc[("Control", r), "revenue_per_user"]
+        variant_rpu = metrics.loc[("Variant", r), "revenue_per_user"]
+
+        cr_lift = (variant_cr - control_cr) / control_cr
+        aov_lift = (variant_aov - control_aov) / control_aov
+        rpu_lift = (variant_rpu - control_rpu) / control_rpu
+
+        metrics.loc[region_mask, "conversion_lift"] = cr_lift
+        metrics.loc[region_mask, "aov_lift"] = aov_lift
+        metrics.loc[region_mask, "rpu_lift"] = rpu_lift
+    
+    return chi2test, aov, metrics
+
+a, b, std_results = analyze_data(users=users_std, purchases=purchases_std)
+c, d, null_results = analyze_data(users=users_null, purchases=purchases_null)
+
+print(f"Metrics table (std)")
+print(std_results)
+print(f"chi2test P-value (std): {a[1]}")
+print(f"ttest P-value (std): {b[1]}")
+
+print(f"Metrics table (null)")
+print(null_results)
+print(f"chi2test P-value (null): {c[1]}")
+print(f"ttest P-value (null)): {d[1]}")
