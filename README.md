@@ -9,30 +9,43 @@ This pipeline simulates large-scale user transactional data under controlled* A/
 
 The pipeline runs two parallel simulation flows: a standard configuration (incorporating a simulated treatment effect) and a null twin configuration (A/A test) to validate statistical precision.
 
-```text
-                  ┌──► Standard Sim (μ=0.15) ──► df_users/purchases ──┐
-                  │                                                   │
-[SeedSequence] ───┼                                                   ├──► [python/analysis.py] ──┬──► Welch's t-test (RPU) ──┬──► CSV Exports ────► [Power BI]
-(Seed: 64)        │                                                   │                           │                           │    (data/*.csv)      (Pending)
-                  └──► Null Twin Sim (μ=0.0)  ──► df_users/purchases ──┘                           └──► Chi-Square (CR) ───────┘
+```mermaid
+%%{init: {'theme': 'neutral'}}%%
+graph LR
+    Seed["SeedSequence<br/>(Seed: 64)"] --> Std["Standard Sim (μ=0.15)"]
+    Seed --> Null["Null Twin Sim (μ=0.0)"]
+    
+    Std --> StdData["df_users / df_purchases"]
+    Null --> NullData["df_users / df_purchases"]
+    
+    StdData --> Analysis["python/analysis.py"]
+    NullData --> Analysis
+    
+    Analysis --> Welch["Welch's t-test (RPU)"]
+    Analysis --> ChiSq["Chi-Square (CR)"]
+    
+    Welch --> CSV["CSV Exports<br/>(data/*.csv)"]
+    ChiSq --> CSV
+    
+    CSV --> PowerBI["Power BI<br/>(Pending)"]
 ```
 
 ### 1. Data Simulation (`python/simulation.py`)
 This module generates the synthetic user base and transactional history. To ensure the simulated data remains reproducible and mathematically decoupled across experimental groups, the random streams are isolated using independent sub-seeds. This prevents modifications in one stream from altering the properties of another:
 
 *   **RNG isolation**: A single root `SeedSequence(seed=64)` spawns 9 independent child generators to prevent cross-stream contamination:
-    1. Group selection RNG
-    2. Region selection RNG
-    3. Control buyer draw RNG
-    4. Variant buyer draw RNG
-    5. Purchase user ID RNG
-    6. Timestamp offset RNG
-    7. Control multiplier RNG
-    8. Variant multiplier RNG
-    9. Purchase baseline value RNG
+    *   **1.** Group selection RNG
+    *   **2.** Region selection RNG
+    *   **3.** Control buyer draw RNG
+    *   **4.** Variant buyer draw RNG
+    *   **5.** Purchase user ID RNG
+    *   **6.** Timestamp offset RNG
+    *   **7.** Control multiplier RNG
+    *   **8.** Variant multiplier RNG
+    *   **9.** Purchase baseline value RNG
 
     *Note: By doing this, changing the sample size or properties of the Variant group has zero downstream impact on the Control group. It remains identical across both Standard and Null runs.*
-*   **User Population ($N = 5,000,000$)**:
+*   **User Population (5,000,000 users)**:
     *   `userid`: Continuous sequence `[0, 4,999,999]`.
     *   `group`: Assigned via binomial choice (50% Control, 50% Variant).
     *   `region`: Assigned via multinomial choice (25% ASIA, 25% EMEA, 25% LATAM, 25% NA).
@@ -41,14 +54,13 @@ This module generates the synthetic user base and transactional history. To ensu
     *   Variant active buyer pool:
         *   *Standard run*: 150,000 unique users drawn without replacement (simulates conversion lift).
         *   *Null Twin run*: 100,000 unique users drawn without replacement (simulates A/A baseline).
-*   **Transactions ($T = 500,000$)**:
+*   **Transactions (500,000 events)**:
     *   `userid`: Sampled with replacement from the active buyer pool.
-    *   `timestamp`: Offsets `2026-07-01` by random seconds in range `[1, 2,678,400]` (~31 days).
-    *   `value`: Base value $V_{base} \sim \text{DiscreteUniform}(10, 25)$. Multiplied by a user-specific value factor and offset by a fractional charge:
-        $$V_{final} = \text{round}(V_{base} \times M_{user}) + 0.99$$
-        *   $M_{user} \sim LN(\mu=0.0, \sigma=0.5)$ for Control.
-        *   $M_{user} \sim LN(\mu=0.15, \sigma=0.5)$ for standard Variant (simulates average order value lift).
-        *   $M_{user} \sim LN(\mu=0.0, \sigma=0.5)$ for null Variant.
+    *   `timestamp`: Distributed uniformly across a 31-day window starting `2026-07-01`.
+    *   `value`: Calculated by drawing a base price uniformly from `[10, 25]`, multiplying it by a user-specific multiplier `M`, rounding to the nearest integer, and adding a `$0.99` cent offset:
+        $$\text{Value} = \text{round}(\text{Base} \times M) + 0.99$$
+        *   **Control & Null Variant**: Multiplier `M ~ Lognormal(0.0, 0.5)` (no average order value lift).
+        *   **Standard Variant**: Multiplier `M ~ Lognormal(0.15, 0.5)` (simulating a ~16% average order value lift).
 
 ### 2. Statistical Analysis (`python/analysis.py`)
 This module aggregates the simulated user and transaction tables to compute treatment effects and evaluate statistical significance. By grouping events before analysis, it ensures that statistical assumptions are met and lifts are measured accurately:
@@ -58,15 +70,11 @@ This module aggregates the simulated user and transaction tables to compute trea
     *   This is left-joined back to the user registry, and non-buyers are filled with 0.
     *   *Why this matters*: Running statistical tests directly on event-level transactions would violate the independence assumption (i.i.d.) due to repeated purchases by the same user, resulting in false confidence (inflated Type I error rates).
 *   **Hypothesis Testing**:
-    *   **Conversion Rate Significance**: Pearson's Chi-Square Test ($X^2$) of independence is run on a $2 \times 2$ contingency table of conversion counts:
-        $$\begin{pmatrix} \text{Control Buyers} & \text{Control Non-Buyers} \\ \text{Variant Buyers} & \text{Variant Non-Buyers} \end{pmatrix}$$
-    *   **Revenue Per User (RPU) Significance**: Welch's t-test (two-sample independent, unequal variances) is run directly on user-level spend arrays:
-        $$t = \frac{\bar{X}_1 - \bar{X}_2}{\sqrt{\frac{s_1^2}{N_1} + \frac{s_2^2}{N_2}}}$$
-        *   *Why Welch's formulation is chosen*: It does not assume equal variances between the Control and Variant groups, which is critical since the Variant group's lognormal multiplier introduces higher variance.
-*   **Regional Segmentation**:
-    *   To guard against Simpson's Paradox, the script loops through regions (EMEA, NA, ASIA, LATAM) to run localized significance tests. Simpson's Paradox can occur if baseline conversion rates differ by region and traffic allocation is uneven, causing aggregate results to contradict regional trends.
-    *   Segmented p-values and percentage lifts are computed for Conversion Rate (CR), Average Order Value (AOV), and Revenue Per User (RPU) as:
-        $$\text{Lift} = \frac{\text{Variant} - \text{Control}}{\text{Control}}$$
+    *   **Conversion Rate Significance**: Pearson's Chi-Square Test of independence evaluates conversion status (buyer vs. non-buyer) counts across Control and Variant groups.
+    *   **Revenue Per User (RPU) Significance**: Welch's t-test (two-sample independent, unequal variances) evaluates user-level spend. Welch's formulation is selected because the lognormal multiplier in the Variant group introduces higher variance, violating the equal-variance assumption of a standard Student's t-test.
+*   **Regional Segmentation & Lift**:
+    *   To guard against Simpson's Paradox, significance tests are run both globally and split by region (EMEA, NA, ASIA, LATAM) to prevent regional variations in baseline rates from skewing aggregate results.
+    *   Segmented p-values and metric lifts (for Conversion Rate, Average Order Value, and Revenue Per User) are calculated as `(Variant - Control) / Control`.
 
 ---
 
@@ -80,7 +88,7 @@ To verify that the statistical tests behave correctly under null conditions and 
 | **Global Revenue (RPU), global p-value** | 0.0000 | 0.9018 | Reject Null vs. Accept Null |
 | **Conversion lift, by region** | +48.12% to +52.29% | -0.82% to +1.19% | Positive Lift vs. Statistical Noise |
 | **RPU lift, by region** | +71.77% to +75.33% | -1.25% to +1.42% | Positive Lift vs. Statistical Noise |
-| **Regions significant** | $p < 0.001$ (All Regions) | $p \ge 0.197$ (None) | Significant vs. Non-Significant |
+| **Regions significant** | p < 0.001 (All Regions) | p >= 0.197 (None) | Significant vs. Non-Significant |
 
 ---
 
