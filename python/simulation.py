@@ -67,6 +67,4 @@ def simulate_data(null_twin = False, seed = 64):
     df_purchases["value"] = purchase_value_rng.integers(10, 25, 500_000)
     df_purchases["value"] = (df_purchases["value"] * df_purchases["multiplier"]).round().to_numpy(dtype=int) + nn
 
-    # df_purchases = df_purchases.drop(["region", "group"], axis=1)
-
     return df_users, df_purchases

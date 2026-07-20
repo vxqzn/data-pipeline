@@ -1,16 +1,6 @@
+import pandas as pd
 import scipy.stats as scs
 from simulation import simulate_data
-
-(
-    users_std, 
-    purchases_std 
-) = simulate_data()
-
-(
-    users_null, 
-    purchases_null 
-) = simulate_data(null_twin=True)
-
 
 def analyze_data(users, purchases):
         
@@ -22,14 +12,15 @@ def analyze_data(users, purchases):
     variant_buyers = purchases.loc[purchases["group"] == "Variant", "userid"].nunique()
     variant_nonbuyers = variant_total_users - variant_buyers
 
-    values = users.join(purchases.groupby("userid").agg(value=("value", "sum")), on="userid").fillna(0)
+    values = users.join(purchases.groupby("userid").agg(value=("value", "sum")), on="userid")
+    values["value"] = values["value"].fillna(0)
     control_values = values.loc[values["group"] == "Control", "value"].to_numpy()
     variant_values = values.loc[values["group"] == "Variant", "value"].to_numpy()
 
 
     table = [[control_buyers, control_nonbuyers], [variant_buyers, variant_nonbuyers]]
-    chi2test = scs.chi2_contingency(table)
 
+    chi2test = scs.chi2_contingency(table)
     aov = scs.ttest_ind(control_values, variant_values, equal_var=False)
 
     users_grouped = users.groupby(["group", "region"]).size()
@@ -39,6 +30,58 @@ def analyze_data(users, purchases):
     metrics["conversion_rate"] = metrics["unique_buyers"] / metrics["total_users"]
     metrics["average_order_value"] = metrics["revenue"] / metrics["transactions"]
     metrics["revenue_per_user"] = metrics["revenue"] / metrics["total_users"]
+
+    control_revenue = control_values.sum()
+    variant_revenue = variant_values.sum()
+    
+    control_ts = (purchases["group"] == "Control").sum()
+    variant_ts = (purchases["group"] == "Variant").sum()
+
+    control_cr = control_buyers / control_total_users
+    variant_cr = variant_buyers / variant_total_users
+    
+    control_aov = control_revenue / control_ts
+    variant_aov = variant_revenue / variant_ts
+
+    control_rpu = control_revenue / control_total_users
+    variant_rpu = variant_revenue / variant_total_users
+    
+    global_cr_lift = (variant_cr - control_cr) / control_cr
+    global_aov_lift = (variant_aov - control_aov) / control_aov
+    global_rpu_lift = (variant_rpu - control_rpu) / control_rpu
+    
+    global_metrics = pd.DataFrame([
+    {
+        "group": "Control",
+        "total_users": control_total_users,
+        "transactions": control_ts,
+        "unique_buyers": control_buyers,
+        "revenue": control_revenue,
+        "conversion_rate": control_cr,
+        "average_order_value": control_aov,
+        "revenue_per_user": control_rpu,
+        "p_value": chi2test[1],
+        "ttest_p_value": aov[1],
+        "conversion_lift": global_cr_lift,
+        "aov_lift": global_aov_lift,
+        "rpu_lift": global_rpu_lift
+    },
+    {
+        "group": "Variant",
+        "total_users": variant_total_users,
+        "transactions": variant_ts,
+        "unique_buyers": variant_buyers,
+        "revenue": variant_revenue,
+        "conversion_rate": variant_cr,
+        "average_order_value": variant_aov,
+        "revenue_per_user": variant_rpu,
+        "p_value": chi2test[1],
+        "ttest_p_value": aov[1],
+        "conversion_lift": global_cr_lift,
+        "aov_lift": global_aov_lift,
+        "rpu_lift": global_rpu_lift
+    }
+]).set_index("group")
 
     regions = ["EMEA", "NA", "ASIA", "LATAM"]
 
@@ -80,22 +123,34 @@ def analyze_data(users, purchases):
         metrics.loc[region_mask, "aov_lift"] = aov_lift
         metrics.loc[region_mask, "rpu_lift"] = rpu_lift
     
-    return chi2test, aov, metrics
+    return metrics, global_metrics
 
+(
+    users_std, 
+    purchases_std 
+) = simulate_data()
 
-a, b, std_results = analyze_data(users=users_std, purchases=purchases_std)
-c, d, null_results = analyze_data(users=users_null, purchases=purchases_null)
+(
+    users_null, 
+    purchases_null 
+) = simulate_data(null_twin=True)
 
-std_results.to_csv("data/std_metrics_results.csv")
-null_results.to_csv("data/null_metrics_results.csv")
+std_results, std_global = analyze_data(users=users_std, purchases=purchases_std)
+null_results, null_global = analyze_data(users=users_null, purchases=purchases_null)
 
 
 #print(f"### Metrics table (std) ###")
 #print(std_results)
-#print(f"\nchi2test P-value (std): {a[1]}")
-#print(f"ttest P-value (std): {b[1]}")
+#print(f"\n### Global Table (std) ###"")
+#print(std_global)
 
 #print(f"\n### Metrics table (null) ###")
 #print(null_results)
-#print(f"\nchi2test P-value (null): {c[1]}")
-#print(f"ttest P-value (null)): {d[1]}")
+#print(f"\n### Global Table (null) ###")
+#print(null_global)
+
+
+std_results.to_csv("data/std_metrics_results.csv")
+std_global.to_csv("data/std_global_results.csv")
+null_results.to_csv("data/null_metrics_results.csv")
+null_global.to_csv("data/null_global_results.csv")
