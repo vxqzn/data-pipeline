@@ -2,7 +2,7 @@ import pandas as pd
 import scipy.stats as scs
 from simulation import simulate_data
 
-def analyze_data(users, purchases):
+def analyze_data(users, purchases, run_type):
         
     control_total_users = (users["group"] == "Control").sum()
     control_buyers = purchases.loc[purchases["group"] == "Control", "userid"].nunique()
@@ -122,7 +122,13 @@ def analyze_data(users, purchases):
         metrics.loc[region_mask, "conversion_lift"] = cr_lift
         metrics.loc[region_mask, "aov_lift"] = aov_lift
         metrics.loc[region_mask, "rpu_lift"] = rpu_lift
-    
+
+    metrics["run_type"] = run_type
+    global_metrics["run_type"] = run_type
+
+    metrics = metrics.reset_index()
+    global_metrics = global_metrics.reset_index()
+
     return metrics, global_metrics
 
 (
@@ -135,22 +141,8 @@ def analyze_data(users, purchases):
     purchases_null 
 ) = simulate_data(null_twin=True)
 
-std_results, std_global = analyze_data(users=users_std, purchases=purchases_std)
-null_results, null_global = analyze_data(users=users_null, purchases=purchases_null)
+region_std, global_std = analyze_data(users_std, purchases_std, run_type="Standard")
+region_null, global_null = analyze_data(users_null, purchases_null, run_type="Null Twin")
 
-
-#print(f"### Metrics table (std) ###")
-#print(std_results)
-#print(f"\n### Global Table (std) ###"")
-#print(std_global)
-
-#print(f"\n### Metrics table (null) ###")
-#print(null_results)
-#print(f"\n### Global Table (null) ###")
-#print(null_global)
-
-
-std_results.to_csv("data/std_metrics_results.csv")
-std_global.to_csv("data/std_global_results.csv")
-null_results.to_csv("data/null_metrics_results.csv")
-null_global.to_csv("data/null_global_results.csv")
+pd.concat([region_std, region_null]).to_csv("data/region_metrics.csv", index=False)
+pd.concat([global_std, global_null]).to_csv("data/global_metrics.csv", index=False)
