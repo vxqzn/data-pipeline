@@ -1,7 +1,8 @@
 # Engineering Notes
 
-A few insights on why this is built the way it is:
+<small>* Right now, treatment effect is homogeneous by construction because buyer draws don't condition on region. A future iteration could inject a per-region multiplier to simulate genuine heterogeneous treatment effects.</small>
 
+A few insights on why this is built the way it is:
 
 ## 1. Seed Isolation
 

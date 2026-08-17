@@ -84,11 +84,13 @@ To verify that the statistical tests behave correctly under null conditions and 
 
 | Metric / Dimension | Standard Run (A/B Test) | Null Twin (A/A Test) | Expectation / Validation |
 | :--- | :--- | :--- | :--- |
-| **Conversion, global p-value** | 0.0000 | 0.7636 | Reject Null vs. Accept Null |
-| **Global Revenue (RPU), global p-value** | 0.0000 | 0.9018 | Reject Null vs. Accept Null |
+| **Conversion, global p-value** | 0.0000 | 0.7636<sup>1</sup> | Reject Null vs. Accept Null |
+| **Global Revenue (RPU), global p-value** | 0.0000 | 0.9018<sup>1</sup> | Reject Null vs. Accept Null |
 | **Conversion lift, by region** | +48.12% to +52.29% | -0.82% to +1.19% | Positive Lift vs. Statistical Noise |
 | **RPU lift, by region** | +71.77% to +75.33% | -1.25% to +1.42% | Positive Lift vs. Statistical Noise |
 | **Regions significant** | p < 0.001 (All Regions) | p >= 0.197 (None) | Significant vs. Non-Significant |
+
+<small><sup>1</sup> Reproducible directly from `data/global_metrics.csv`</small>
 
 ---
 
@@ -134,8 +136,8 @@ Directory structure separating code, data, and presentation layers:
 
 *   **[python/simulation.py](python/simulation.py)**: Python generator module implementing lognormal multipliers and seeded sub-stream data generation.
 *   **[python/analysis.py](python/analysis.py)**: Metrics aggregation logic executing Welch's t-test and Chi-square calculations globally and per-region.
-*   **[data/std_metrics_results.csv](data/std_metrics_results.csv)**: Regional aggregated metrics and statistical tests output for the standard test configuration.
-*   **[data/null_metrics_results.csv](data/null_metrics_results.csv)**: Regional aggregated metrics and statistical tests output for the null (A/A) twin configuration.
+*   **[data/global_metrics.csv](data/global_metrics.csv)**: Global aggregated metrics and statistical tests output for the standard & null twin configuration.
+*   **[data/region_metrics.csv](data/region_metrics.csv)**: Regional aggregated metrics and statistical tests output for the standard & null twin configuration.
 *   **[powerbi/ab_testing_dashboard.pbix](powerbi/ab_testing_dashboard.pbix)**: Power BI report visualising aggregate conversion, AOV, RPU, and region-level treatment significance.
 *   **[requirements.txt](requirements.txt)**: Core dependencies (`pandas`, `numpy`, `scipy`).
 
@@ -143,7 +145,7 @@ Directory structure separating code, data, and presentation layers:
 
 - [x] Data Simulation (`python/simulation.py`)
 - [x] Statistical Analysis (`python/analysis.py`)
-- [x] Data Export (`data/std_metrics_results.csv`, `data/null_metrics_results.csv`)
+- [x] Data Export (`data/global_metrics.csv`, `data/region_metrics.csv`)
 - [ ] Power BI Dashboard (Pending onboarding of the generated CSV exports)
 
 ## Notes
