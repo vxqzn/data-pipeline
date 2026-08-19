@@ -27,7 +27,7 @@ graph LR
     Welch --> CSV["CSV Exports<br/>(data/*.csv)"]
     ChiSq --> CSV
     
-    CSV --> PowerBI["Power BI<br/>(Pending)"]
+    CSV --> PowerBI["Power BI Report<br/>(4 pages: Summary, Results,<br/>Methodology, Diagnostics)"]
 ```
 
 ### 1. Data Simulation (`python/simulation.py`)
@@ -138,7 +138,7 @@ Directory structure separating code, data, and presentation layers:
 *   **[python/analysis.py](python/analysis.py)**: Metrics aggregation logic executing Welch's t-test and Chi-square calculations globally and per-region.
 *   **[data/global_metrics.csv](data/global_metrics.csv)**: Global aggregated metrics and statistical tests output for the standard & null twin configuration.
 *   **[data/region_metrics.csv](data/region_metrics.csv)**: Regional aggregated metrics and statistical tests output for the standard & null twin configuration.
-*   **[powerbi/ab_testing_dashboard.pbix](powerbi/ab_testing_dashboard.pbix)**: Power BI report visualising aggregate conversion, AOV, RPU, and region-level treatment significance.
+*   **[powerbi/ab_testing_dashboard.pbix](powerbi/ab_testing_dashboard.pbix)**: Four-page Power BI report. Executive Summary states the ship/no-ship call; A/B Test Results breaks out conversion, AOV, and RPU by region; Methodology documents test selection and known metric caveats; A/A Test Validation shows the null-twin calibration check, p-values plotted against the α = 0.05 threshold.
 *   **[requirements.txt](requirements.txt)**: Core dependencies (`pandas`, `numpy`, `scipy`).
 
 ## Project Status
@@ -146,7 +146,7 @@ Directory structure separating code, data, and presentation layers:
 - [x] Data Simulation (`python/simulation.py`)
 - [x] Statistical Analysis (`python/analysis.py`)
 - [x] Data Export (`data/global_metrics.csv`, `data/region_metrics.csv`)
-- [ ] Power BI Dashboard (Pending onboarding of the generated CSV exports)
+- [x] Power BI Dashboard (`powerbi/ab_testing_dashboard.pbix`, 4-page report: Executive Summary, A/B Test Results, Methodology, A/A Test Validation)
 
 ## Notes
 See **[NOTES.md](NOTES.md)** more depth.
